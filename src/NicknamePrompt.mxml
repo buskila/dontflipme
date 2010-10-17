@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="324" height="98"
+		 title="Don't flip me" close="closeHandler(event)" creationComplete="creationCompleteHandler(event)"
+		 >
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+
+	<fx:Script>
+		<![CDATA[
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+
+			private var completionCallback:Function;
+			
+			public function Show(confirmed:Function, parent:DisplayObject):void
+			{
+				completionCallback = confirmed;
+				showCloseButton = false;
+
+				PopUpManager.addPopUp(this, parent, true);
+				PopUpManager.centerPopUp(this);
+			}
+
+			protected function closeHandler(event:CloseEvent):void
+			{
+				PopUpManager.removePopUp(this);
+			}
+
+
+			protected function set_clickHandler(event:MouseEvent):void
+			{
+				PopUpManager.removePopUp(this);
+				
+				if (null != completionCallback)
+					completionCallback(nickName.text);
+			}
+
+
+			protected function creationCompleteHandler(event:FlexEvent):void
+			{
+				focusManager.setFocus(nickName);
+				// TODO Auto-generated method stub
+			}
+
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" verticalAlign="middle">
+		<s:Label text="Choose nickname" width="100%" paddingTop="4" paddingBottom="2"/>
+		<s:HGroup width="100%">
+			<s:TextInput width="100%" id="nickName" enter="set_clickHandler(null)"/>
+			<s:Button label="Set" click="set_clickHandler(event)"/>
+		</s:HGroup>
+	</s:VGroup>
+	
+</mx:TitleWindow>

@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			xmlns:s="library://ns.adobe.com/flex/spark" 
+			xmlns:mx="library://ns.adobe.com/flex/mx" width="400" height="300" currentState="Disconnected"
+			creationComplete="creationCompleteHandler(event)"
+		 
+		 >
+	<s:states>
+		<s:State name="Connected"/>
+		<s:State name="Disconnected"/>
+	</s:states>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			[Inspectable]
+			public var applicationUrl:String;
+			[Inspectable]
+			public var nickname:String;
+			[Inspectable]
+			public var chatRoom:String;
+			[Inspectable]
+			public var firstUpdateMessagesToDisplay:int = 4;
+			
+			
+			private var chatContentSharedObject:SharedObject;
+			
+
+			private var nc:NetConnection = new NetConnection();
+			
+			private function nullFunction(result:Object):void {}
+			private function callRemoteMethod(methodName:String, statusF:Function, resultF:Function, ...params):void
+			{
+				var responder:Responder = new Responder(resultF, statusF);
+
+				if (1 == params.length)
+					nc.call(methodName, responder, params[0]);
+				else if (2 == params.length)
+					nc.call(methodName, responder, params[0], params[1]);
+				else if (3 == params.length)
+					nc.call(methodName, responder, params[0], params[1], params[2]);
+				else if (4 == params.length)
+					nc.call(methodName, responder, params[0], params[1], params[2], params[3]);
+				else
+					nc.call(methodName, responder, params);
+			}
+			
+			private var lastChatId:Number = 0;
+			private function chatContentSyncEvent(event:SyncEvent):void
+			{
+				var chatText:String = "";
+				var infoObj:Object = event.changeList;
+				
+				// if first time only show last 4 messages in the list
+				if (lastChatId == 0)
+				{
+					lastChatId = Number(chatContentSharedObject.data["lastChatId"]) - firstUpdateMessagesToDisplay;
+					if (lastChatId < 0)
+						lastChatId = 0;
+				}
+				
+				// show new messasges
+				var currChatId:Number = Number(chatContentSharedObject.data["lastChatId"]);
+				
+				// if there are new messages to display
+				if (currChatId > 0)
+				{
+					var i:Number;
+					for(i=(lastChatId+1);i<=currChatId;i++)
+					{
+						if (chatContentSharedObject.data["chatData"+i] != undefined)
+						{
+							var chatMessage:Object = chatContentSharedObject.data["chatData"+i];
+							
+							var msg:String = formatMessage(chatMessage);
+							trace("recvMessage: "+msg);
+							//listChat.addItem(msg);
+							chatText = "<p>" + msg + "</p>";
+							listChat.htmlText = chatText + listChat.htmlText;
+							
+						}
+					}
+					
+//					if (listChat.length > 0)
+					listChat.selectionBeginIndex = 9999999;
+					listChat.selectionEndIndex = 9999999;
+					listChat.verticalScrollPosition = 9999999;
+					
+					lastChatId = currChatId;
+				}
+			}
+			
+			private function formatMessage(chatData:Object):String
+			{
+				var msg:String;
+				var currTime:Date = chatData.time;
+				
+				var hour24:Number = currTime.getHours();
+				var ampm:String = (hour24<12) ? "AM" : "PM";
+				var hourNum:Number = hour24%12;
+				if (hourNum == 0)
+					hourNum = 12;
+				
+				var hourStr:String = hourNum+"";
+				var minuteStr:String = (currTime.getMinutes())+"";
+				if (minuteStr.length < 2)
+					minuteStr = "0"+minuteStr;
+				var secondStr:String = (currTime.getSeconds())+"";
+				if (secondStr.length < 2)
+					secondStr = "0"+secondStr;
+				
+//				msg = "<u>"+hourStr+":"+minuteStr+":"+secondStr+ampm+"</u> - <b>"+chatData.user+"</b>: "+chatData.message;
+				msg = "<b>" + chatData.user + "</b>: " + chatData.message;
+				return msg;
+			}
+
+			private function creationCompleteHandler(event:FlexEvent):void
+			{
+				nc.addEventListener(NetStatusEvent.NET_STATUS, function(e:NetStatusEvent):void
+				{
+					switch (e.info.code)
+					{
+						case "NetConnection.Connect.Success":
+						{
+							callRemoteMethod("initSharedObject",
+																nullFunction,
+																function(result:Object):void
+																{
+																	try
+																	{
+																		chatContentSharedObject = SharedObject.getRemote(chatRoom, nc.uri);
+																		chatContentSharedObject.addEventListener(SyncEvent.SYNC, chatContentSyncEvent);
+																		chatContentSharedObject.connect(nc);
+																	}
+																	catch (exception:Error)
+																	{
+																		return;
+																	}
+																	
+																	
+																	currentState = "Connected";
+																},
+																chatRoom);
+							
+							break;
+						}
+						case "NetConnection.Connect.Closed":
+						case "NetConnection.Connect.Failed":
+						case "NetConnection.Connect.Rejected":
+						case "NetConnection.Call.Failed":
+						{
+							currentState = "Disconnected";
+							break;
+						}
+					}
+				});
+				
+				nc.connect(applicationUrl);
+			}
+
+
+			private function sendChatMessage():void
+			{
+				var chatMessage:Object = new Object();
+				
+				chatMessage.message = chatEntry.text;
+				chatMessage.time = new Date();
+				chatMessage.user = nickname;
+				
+				callRemoteMethod("addMessage", null, null, chatRoom, chatMessage);
+			}
+			
+			protected function promptForNickname():void
+			{
+				var prompt:NicknamePrompt = new NicknamePrompt();
+				prompt.Show(function(newNickname:String):void
+				{
+					nickname = newNickname;
+					
+					if (nickname && (nickname.length != 0))
+						sendChatMessage();
+					chatEntry.text = null;
+				}, this);
+				
+			
+			}
+			
+			protected function sendClickHandler(event:MouseEvent):void
+			{
+				if (!nickname || (nickname.length == 0))
+				{
+					promptForNickname();
+					return;
+				}
+
+				sendChatMessage();
+				chatEntry.text = null;
+				
+			}
+		]]>
+	</fx:Script>
+	
+	
+	<s:VGroup width="100%" height="100%" paddingBottom="4" paddingLeft="4" paddingRight="4" paddingTop="4">
+		<mx:TextArea height="100%" width="100%" paddingBottom="4" id="listChat" editable="false" selectable="true"/>
+		<s:HGroup width="100%">
+			<s:TextInput id="chatEntry" width="100%"/>
+			<s:Button label="Send" enabled.Disconnected="false" click="sendClickHandler(event)"/>
+		</s:HGroup>
+		
+	</s:VGroup>
+</s:Group>
