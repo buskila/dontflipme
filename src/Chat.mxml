@@ -9,9 +9,6 @@
 		<s:State name="Connected"/>
 		<s:State name="Disconnected"/>
 	</s:states>
-	<fx:Declarations>
-		<!-- Place non-visual elements (e.g., services, value objects) here -->
-	</fx:Declarations>
 
 	<fx:Script>
 		<![CDATA[
